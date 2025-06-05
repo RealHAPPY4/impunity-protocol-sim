@@ -8,12 +8,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-# Page config
 st.set_page_config(page_title="ICU Emergency Simulator", layout="wide")
 
-# -------------------
-# Sidebar - Patient Info
-# -------------------
+# ---------------- Sidebar ---------------- #
 st.sidebar.title("👤 Patient Profile")
 patient = {
     "ID": "PATIENT_05",
@@ -24,76 +21,58 @@ patient = {
 }
 for k, v in patient.items():
     st.sidebar.markdown(f"**{k}:** {v if not isinstance(v, list) else ', '.join(v)}")
-
 st.sidebar.markdown("---")
 st.sidebar.markdown("🔘 Simulate an emergency case:")
 
-# -------------------
-# Simulate Vitals
-# -------------------
+# ---------------- Vitals Simulation ---------------- #
 def simulate_vitals(case_id):
-    if case_id == 1:
-        return {"HR": 82, "SpO2": 96, "Glucose": 61, "Movement": False}
-    elif case_id == 2:
-        return {"HR": 38, "SpO2": 80, "Glucose": 112, "Movement": False}
-    elif case_id == 3:
-        return {"HR": 75, "SpO2": 92, "Glucose": 105, "Movement": True}
-    else:
-        return {}
+    return {
+        1: {"HR": 82, "SpO2": 96, "Glucose": 61, "Movement": False},  # Insulin Deficiency
+        2: {"HR": 38, "SpO2": 80, "Glucose": 112, "Movement": False}, # Drug Not Available
+        3: {"HR": 75, "SpO2": 92, "Glucose": 105, "Movement": True},  # Awakening
+        4: {"HR": 85, "SpO2": 85, "Glucose": 108, "Movement": False}, # Oxygen Deficiency
+        5: {"HR": 28, "SpO2": 76, "Glucose": 114, "Movement": False}, # Cardiac Arrest
+    }.get(case_id, {})
 
-# -------------------
-# Protocol Decision Logic
-# -------------------
+# ---------------- Protocol Engine ---------------- #
 def generate_case_protocol(case_id, vitals):
-    if case_id == 1:
-        return {
+    protocols = {
+        1: {
             "title": "CASE 1: Insulin Deficiency",
-            "explanation": "Detected low glucose in diabetic patient. Emergency insulin protocol triggered.",
+            "explanation": "Low glucose detected in diabetic patient. Emergency insulin protocol initiated.",
             "topic": "/ICU/devices/patient_05/inject_insulin",
-            "actions": [
-                "💉 Auto-injection: 6 units insulin",
-                "📝 EHR updated",
-                "📡 Notified remote ICU monitor"
-            ],
-            "critical": True
-        }
-    elif case_id == 2:
-        return {
+            "actions": ["💉 Inject 6 units insulin", "📝 Update EHR", "📡 Notify ICU staff"],
+        },
+        2: {
             "title": "CASE 2: Drug Not Available",
-            "explanation": "Low HR & SpO₂ detected. Required drug unavailable. Request sent to nearby hospitals.",
+            "explanation": "Critical cardiac condition. Required drug not available locally. Remote dispatch triggered.",
             "topic": "/ICU/med_alert/adrenaline_request",
-            "actions": [
-                "❗ Adrenaline unavailable locally",
-                "📶 MQTT broadcast to network",
-                "🚁 Drone dispatched from Hospital_B",
-                "📲 ICU updated with ETA"
-            ],
-            "critical": True
-        }
-    elif case_id == 3:
-        return {
+            "actions": ["📶 Broadcast MQTT request", "🚁 Drone dispatched from Hospital_B", "📲 ICU notified"],
+        },
+        3: {
             "title": "CASE 3: Patient Awakens",
-            "explanation": "Detected movement from unconscious patient. Awakening protocol started.",
+            "explanation": "Movement detected in previously comatose patient. Awakening protocol initiated.",
             "topic": "/ICU/alerts/patient_awake",
-            "actions": [
-                "📈 Movement matched awakening pattern",
-                "📬 Alert sent to ICU team",
-                "🧠 Neurological eval initiated"
-            ],
-            "critical": True
+            "actions": ["📈 Motion match confirmed", "👨‍⚕️ Alert neuro team", "📋 Start assessment"],
+        },
+        4: {
+            "title": "CASE 4: Oxygen Deficiency",
+            "explanation": "Low SpO₂ detected. Auto-triggered oxygen valve activation.",
+            "topic": "/ICU/devices/oxygen_supply/start",
+            "actions": ["🫁 Oxygen supply initiated", "🔔 ICU staff alerted", "📡 Status logged"],
+        },
+        5: {
+            "title": "CASE 5: Cardiac Arrest",
+            "explanation": "Cardiac arrest detected. Full Code Blue protocol triggered.",
+            "topic": "/ICU/alerts/code_blue",
+            "actions": ["🚨 Code Blue alert", "🧬 Cardiac protocol activated", "📞 Team paged"],
         }
-    else:
-        return {
-            "title": "Monitoring Mode",
-            "explanation": "All vitals normal. No intervention required.",
-            "topic": "/ICU/monitoring/passive",
-            "actions": ["🟢 Passive monitoring", "📊 No emergency triggered"],
-            "critical": False
-        }
+    }
+    protocol = protocols.get(case_id)
+    protocol["critical"] = True
+    return protocol
 
-# -------------------
-# Graph of Vitals
-# -------------------
+# ---------------- Vitals Chart ---------------- #
 def plot_vitals(vitals):
     df = pd.DataFrame({
         "Time": [f"T-{i}" for i in range(9, -1, -1)],
@@ -108,38 +87,28 @@ def plot_vitals(vitals):
     fig.update_layout(template="plotly_white", height=400)
     return fig
 
-# -------------------
-# Generate PDF Report
-# -------------------
+# ---------------- PDF Export ---------------- #
 def generate_pdf_report(case_id, vitals, protocol):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
-    elements = []
+    elements = [Paragraph("🧠 ICU Emergency Report", styles['Title']), Spacer(1, 12)]
 
-    elements.append(Paragraph("🧠 ICU Emergency Report", styles['Title']))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"<b>Patient ID:</b> {patient['ID']} &nbsp;&nbsp;&nbsp;&nbsp; <b>Age:</b> {patient['Age']}", styles['Normal']))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"<b>Case:</b> {protocol['title']}", styles['Heading3']))
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(protocol['explanation'], styles['BodyText']))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"<b>MQTT Topic Triggered:</b> {protocol['topic']}", styles['BodyText']))
-    elements.append(Spacer(1, 12))
-
-    vitals_data = [
-        ["Heart Rate", "SpO₂", "Glucose", "Movement"],
-        [f"{vitals['HR']} bpm", f"{vitals['SpO2']}%", f"{vitals['Glucose']} mg/dL", "Yes" if vitals['Movement'] else "No"]
+    elements += [
+        Paragraph(f"<b>Patient ID:</b> {patient['ID']} &nbsp;&nbsp; <b>Age:</b> {patient['Age']}", styles['Normal']),
+        Spacer(1, 12),
+        Paragraph(f"<b>Case:</b> {protocol['title']}", styles['Heading3']),
+        Paragraph(protocol['explanation'], styles['BodyText']),
+        Spacer(1, 12),
+        Paragraph(f"<b>MQTT Topic:</b> {protocol['topic']}", styles['BodyText']),
+        Spacer(1, 12),
     ]
+
+    vitals_data = [["Heart Rate", "SpO₂", "Glucose", "Movement"],
+                   [f"{vitals['HR']} bpm", f"{vitals['SpO2']}%", f"{vitals['Glucose']} mg/dL", "Yes" if vitals["Movement"] else "No"]]
     table = Table(vitals_data, hAlign='LEFT')
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#d0e0f0")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12)
-    ]))
+    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                               ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)]))
     elements.append(table)
     elements.append(Spacer(1, 18))
 
@@ -148,36 +117,27 @@ def generate_pdf_report(case_id, vitals, protocol):
         elements.append(Paragraph(f"• {action}", styles['Normal']))
     elements.append(Spacer(1, 18))
 
-    explanation = (
-        "<b>How MQTT Broker Works:</b><br/>"
-        "MQTT is a lightweight publish-subscribe protocol for IoT. "
-        "Sensors publish vitals to topics. The protocol engine subscribes to these, analyzes the data, and publishes emergency commands to other topics. "
-        "Subscribed IoT devices (e.g., injectors or drones) act in real time — enabling autonomous critical care."
-    )
-    elements.append(Paragraph(explanation, styles['BodyText']))
+    elements.append(Paragraph(
+        "<b>MQTT Explanation:</b><br/>MQTT enables publish-subscribe communication between medical sensors and devices. "
+        "The AI engine listens to vitals, detects emergencies, and publishes dynamic emergency topics to which medical IoT devices respond autonomously.",
+        styles['BodyText']
+    ))
 
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-# -------------------
-# Case Selection Buttons
-# -------------------
-col1, col2, col3 = st.columns(3)
-selected_case = 0
-if col1.button("🩺 Case 1: Insulin Deficiency"):
-    selected_case = 1
-elif col2.button("💊 Case 2: Drug Unavailable"):
-    selected_case = 2
-elif col3.button("🧠 Case 3: Patient Awakens"):
-    selected_case = 3
+# ---------------- Main Interface ---------------- #
+cols = st.columns(5)
+labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
+case_id = 0
+for i, col in enumerate(cols):
+    if col.button(labels[i]):
+        case_id = i + 1
 
-# -------------------
-# Display Simulation
-# -------------------
-if selected_case > 0:
-    vitals = simulate_vitals(selected_case)
-    protocol = generate_case_protocol(selected_case, vitals)
+if case_id:
+    vitals = simulate_vitals(case_id)
+    protocol = generate_case_protocol(case_id, vitals)
 
     st.header(protocol["title"])
     st.success(protocol["explanation"])
@@ -187,17 +147,18 @@ if selected_case > 0:
     for action in protocol["actions"]:
         st.markdown(f"- {action}")
 
-    st.markdown("### 📈 Vitals Over Time")
+    st.markdown("### 📈 Vitals Chart")
     st.plotly_chart(plot_vitals(vitals), use_container_width=True)
 
-    # Play sound if critical
+    # 🔊 Auto-play audio if critical
     if protocol["critical"]:
-        st.audio("https://assets.mixkit.co/sfx/preview/mixkit-classic-alarm-995.mp3")
+        alarm_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"
+        st.markdown(f'<audio autoplay src="{alarm_url}" controls hidden></audio>', unsafe_allow_html=True)
 
-    # 📄 Download PDF
-    pdf_buffer = generate_pdf_report(selected_case, vitals, protocol)
-    st.download_button("📄 Download Report (PDF)", data=pdf_buffer,
+    # 📄 PDF Export
+    pdf = generate_pdf_report(case_id, vitals, protocol)
+    st.download_button("📄 Download Case Report (PDF)", data=pdf,
                        file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
 
 st.markdown("---")
-st.caption("💡 Impunity Protocol Engine | Smart ICU Simulation | MQTT Powered")
+st.caption("📡 Impunity Protocol Engine | Smart ICU Simulation | MQTT-Powered")
