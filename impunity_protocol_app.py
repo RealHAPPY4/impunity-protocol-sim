@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import random
-import io
+import random, io, smtplib, csv
+from email.mime.text import MIMEText
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
@@ -10,67 +10,70 @@ from reportlab.lib import colors
 
 st.set_page_config(page_title="ICU Emergency Simulator", layout="wide")
 
-# ---------------- Sidebar ---------------- #
-st.sidebar.title("👤 Patient Profile")
-patient = {
-    "ID": "PATIENT_05",
-    "Age": 67,
-    "Diabetic": True,
-    "Allergies": ["Penicillin"],
-    "History": "Coma (3 days)"
+# ---------------- Patient Profiles ---------------- #
+patients = {
+    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)"},
+    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension"},
+    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery"}
 }
+
+selected_patient = st.sidebar.selectbox("👤 Select Patient", list(patients.keys()))
+patient = patients[selected_patient]
+st.sidebar.markdown("### Patient Profile")
 for k, v in patient.items():
     st.sidebar.markdown(f"**{k}:** {v if not isinstance(v, list) else ', '.join(v)}")
+
+# ---------------- Feedback Form ---------------- #
 st.sidebar.markdown("---")
-st.sidebar.markdown("🔘 Simulate an emergency case:")
+st.sidebar.subheader("💬 Feedback")
+with st.sidebar.form("feedback_form"):
+    name = st.text_input("Your Name")
+    email = st.text_input("Your Email")
+    message = st.text_area("Feedback Message")
+    submitted = st.form_submit_button("Submit")
+    if submitted:
+        with open("feedback_log.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([name, email, message])
+        st.sidebar.success("✅ Thank you for your feedback!")
 
 # ---------------- Vitals Simulation ---------------- #
 def simulate_vitals(case_id):
     return {
-        1: {"HR": 82, "SpO2": 96, "Glucose": 61, "Movement": False},  # Insulin Deficiency
-        2: {"HR": 38, "SpO2": 80, "Glucose": 112, "Movement": False}, # Drug Not Available
-        3: {"HR": 75, "SpO2": 92, "Glucose": 105, "Movement": True},  # Awakening
-        4: {"HR": 85, "SpO2": 85, "Glucose": 108, "Movement": False}, # Oxygen Deficiency
-        5: {"HR": 28, "SpO2": 76, "Glucose": 114, "Movement": False}, # Cardiac Arrest
+        1: {"HR": 82, "SpO2": 96, "Glucose": 61, "Movement": False},
+        2: {"HR": 38, "SpO2": 80, "Glucose": 112, "Movement": False},
+        3: {"HR": 75, "SpO2": 92, "Glucose": 105, "Movement": True},
+        4: {"HR": 85, "SpO2": 85, "Glucose": 108, "Movement": False},
+        5: {"HR": 28, "SpO2": 76, "Glucose": 114, "Movement": False},
     }.get(case_id, {})
 
 # ---------------- Protocol Engine ---------------- #
 def generate_case_protocol(case_id, vitals):
     protocols = {
-        1: {
-            "title": "CASE 1: Insulin Deficiency",
+        1: {"title": "CASE 1: Insulin Deficiency",
             "explanation": "Low glucose detected in diabetic patient. Emergency insulin protocol initiated.",
-            "topic": "/ICU/devices/patient_05/inject_insulin",
-            "actions": ["💉 Inject 6 units insulin", "📝 Update EHR", "📡 Notify ICU staff"],
-        },
-        2: {
-            "title": "CASE 2: Drug Not Available",
-            "explanation": "Critical cardiac condition. Required drug not available locally. Remote dispatch triggered.",
+            "topic": "/ICU/devices/patient/inject_insulin",
+            "actions": ["💉 Inject 6 units insulin", "📝 Update EHR", "📡 Notify ICU staff"]},
+        2: {"title": "CASE 2: Drug Not Available",
+            "explanation": "Critical cardiac condition. Drug unavailable locally. Remote dispatch triggered.",
             "topic": "/ICU/med_alert/adrenaline_request",
-            "actions": ["📶 Broadcast MQTT request", "🚁 Drone dispatched from Hospital_B", "📲 ICU notified"],
-        },
-        3: {
-            "title": "CASE 3: Patient Awakens",
-            "explanation": "Movement detected in previously comatose patient. Awakening protocol initiated.",
+            "actions": ["📶 Broadcast MQTT request", "🚁 Drone dispatched", "📲 ICU notified"]},
+        3: {"title": "CASE 3: Patient Awakens",
+            "explanation": "Movement detected in previously comatose patient.",
             "topic": "/ICU/alerts/patient_awake",
-            "actions": ["📈 Motion match confirmed", "👨‍⚕️ Alert neuro team", "📋 Start assessment"],
-        },
-        4: {
-            "title": "CASE 4: Oxygen Deficiency",
-            "explanation": "Low SpO₂ detected. Auto-triggered oxygen valve activation.",
+            "actions": ["📈 Motion confirmed", "👨‍⚕️ Alert neuro team", "📋 Start assessment"]},
+        4: {"title": "CASE 4: Oxygen Deficiency",
+            "explanation": "Low SpO₂ detected. Oxygen valve activated.",
             "topic": "/ICU/devices/oxygen_supply/start",
-            "actions": ["🫁 Oxygen supply initiated", "🔔 ICU staff alerted", "📡 Status logged"],
-        },
-        5: {
-            "title": "CASE 5: Cardiac Arrest",
-            "explanation": "Cardiac arrest detected. Full Code Blue protocol triggered.",
+            "actions": ["🫁 Oxygen supply started", "🔔 Staff alerted", "📡 Status logged"]},
+        5: {"title": "CASE 5: Cardiac Arrest",
+            "explanation": "Cardiac arrest detected. Full Code Blue triggered.",
             "topic": "/ICU/alerts/code_blue",
-            "actions": ["🚨 Code Blue alert", "🧬 Cardiac protocol activated", "📞 Team paged"],
-        }
+            "actions": ["🚨 Code Blue alert", "🧬 Cardiac protocol activated", "📞 Team paged"]}
     }
-    protocol = protocols.get(case_id)
-    protocol["critical"] = True
-    return protocol
+    p = protocols.get(case_id)
+    p["critical"] = True
+    return p
 
 # ---------------- Vitals Chart ---------------- #
 def plot_vitals(vitals):
@@ -87,15 +90,14 @@ def plot_vitals(vitals):
     fig.update_layout(template="plotly_white", height=400)
     return fig
 
-# ---------------- PDF Export ---------------- #
+# ---------------- PDF Report ---------------- #
 def generate_pdf_report(case_id, vitals, protocol):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
     elements = [Paragraph("🧠 ICU Emergency Report", styles['Title']), Spacer(1, 12)]
-
     elements += [
-        Paragraph(f"<b>Patient ID:</b> {patient['ID']} &nbsp;&nbsp; <b>Age:</b> {patient['Age']}", styles['Normal']),
+        Paragraph(f"<b>Patient ID:</b> {selected_patient} &nbsp;&nbsp; <b>Age:</b> {patient['Age']}", styles['Normal']),
         Spacer(1, 12),
         Paragraph(f"<b>Case:</b> {protocol['title']}", styles['Heading3']),
         Paragraph(protocol['explanation'], styles['BodyText']),
@@ -103,7 +105,6 @@ def generate_pdf_report(case_id, vitals, protocol):
         Paragraph(f"<b>MQTT Topic:</b> {protocol['topic']}", styles['BodyText']),
         Spacer(1, 12),
     ]
-
     vitals_data = [["Heart Rate", "SpO₂", "Glucose", "Movement"],
                    [f"{vitals['HR']} bpm", f"{vitals['SpO2']}%", f"{vitals['Glucose']} mg/dL", "Yes" if vitals["Movement"] else "No"]]
     table = Table(vitals_data, hAlign='LEFT')
@@ -111,21 +112,31 @@ def generate_pdf_report(case_id, vitals, protocol):
                                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)]))
     elements.append(table)
     elements.append(Spacer(1, 18))
-
     elements.append(Paragraph("<b>Actions Taken:</b>", styles['Heading4']))
     for action in protocol["actions"]:
         elements.append(Paragraph(f"• {action}", styles['Normal']))
     elements.append(Spacer(1, 18))
-
-    elements.append(Paragraph(
-        "<b>MQTT Explanation:</b><br/>MQTT enables publish-subscribe communication between medical sensors and devices. "
-        "The AI engine listens to vitals, detects emergencies, and publishes dynamic emergency topics to which medical IoT devices respond autonomously.",
-        styles['BodyText']
-    ))
-
     doc.build(elements)
     buffer.seek(0)
     return buffer
+
+# ---------------- Email Alerts ---------------- #
+def send_email(subject, body, to_email):
+    from_email = "your_email@gmail.com"
+    password = "your_app_password"  # Use App Password for Gmail
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(from_email, password)
+        server.sendmail(from_email, [to_email], msg.as_string())
+        server.quit()
+        st.info("📧 Email alert sent successfully!")
+    except Exception as e:
+        st.error(f"❌ Email not sent: {e}")
 
 # ---------------- Main Interface ---------------- #
 cols = st.columns(5)
@@ -138,27 +149,40 @@ for i, col in enumerate(cols):
 if case_id:
     vitals = simulate_vitals(case_id)
     protocol = generate_case_protocol(case_id, vitals)
-
     st.header(protocol["title"])
     st.success(protocol["explanation"])
     st.markdown(f"**📡 MQTT Topic:** `{protocol['topic']}`")
 
     st.markdown("### ✅ Actions Taken")
-    for action in protocol["actions"]:
-        st.markdown(f"- {action}")
+    for i, action in enumerate(protocol["actions"], 1):
+        st.markdown(f"{i}. {action}")
 
     st.markdown("### 📈 Vitals Chart")
     st.plotly_chart(plot_vitals(vitals), use_container_width=True)
 
-    # 🔊 Auto-play audio if critical
     if protocol["critical"]:
         alarm_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"
         st.markdown(f'<audio autoplay src="{alarm_url}" controls hidden></audio>', unsafe_allow_html=True)
 
-    # 📄 PDF Export
+    # Email Alert Option
+    if st.checkbox("📧 Send Email Alert to Doctor"):
+        send_email(protocol["title"], protocol["explanation"], "doctor_email@hospital.com")
+
+    # PDF Export
     pdf = generate_pdf_report(case_id, vitals, protocol)
     st.download_button("📄 Download Case Report (PDF)", data=pdf,
                        file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
 
+    # Log Download
+    log_data = pd.DataFrame([{"Patient": selected_patient, "Case": protocol["title"],
+                              "Topic": protocol["topic"], "HR": vitals["HR"],
+                              "SpO2": vitals["SpO2"], "Glucose": vitals["Glucose"],
+                              "Movement": vitals["Movement"]}])
+    csv_buf = io.StringIO()
+    log_data.to_csv(csv_buf, index=False)
+    st.download_button("📥 Download Session Log (CSV)", data=csv_buf.getvalue(),
+                       file_name="icu_log.csv", mime="text/csv")
+
 st.markdown("---")
-st.caption("📡 Impunity Protocol Engine | Smart ICU Simulation | MQTT-Powered")
+st.caption("📡 Impunity Protocol Engine | Smart ICU Simulation | MQTT-Powered | Enhanced Features")
+
