@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import random, io, smtplib, csv
+import random, io, csv, smtplib
 from email.mime.text import MIMEText
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-st.set_page_config(page_title="ICU Emergency Simulator", layout="wide")
+st.set_page_config(page_title="ICU MQTT Emergency Simulator", layout="wide")
 
 # ---------------- Patient Profiles ---------------- #
 patients = {
@@ -16,7 +16,6 @@ patients = {
     "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension"},
     "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery"}
 }
-
 selected_patient = st.sidebar.selectbox("👤 Select Patient", list(patients.keys()))
 patient = patients[selected_patient]
 st.sidebar.markdown("### Patient Profile")
@@ -35,7 +34,7 @@ with st.sidebar.form("feedback_form"):
         with open("feedback_log.csv", "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([name, email, message])
-        st.sidebar.success("✅ Thank you for your feedback!")
+        st.sidebar.success("✅ Feedback saved!")
 
 # ---------------- Vitals Simulation ---------------- #
 def simulate_vitals(case_id):
@@ -87,7 +86,23 @@ def plot_vitals(vitals):
     fig.add_trace(go.Scatter(x=df["Time"], y=df["Heart Rate"], name="Heart Rate", line=dict(color="red")))
     fig.add_trace(go.Scatter(x=df["Time"], y=df["SpO₂"], name="SpO₂", line=dict(color="blue")))
     fig.add_trace(go.Scatter(x=df["Time"], y=df["Glucose"], name="Glucose", line=dict(color="green")))
-    fig.update_layout(template="plotly_white", height=400)
+    fig.update_layout(template="plotly_white", height=350)
+    return fig
+
+# ---------------- MQTT Flow Diagram ---------------- #
+def mqtt_flow_diagram(case, protocol):
+    labels = ["Sensor", "MQTT Broker", "AI Engine", "IoT Device/Hospital"]
+    sources = [0, 1, 2]
+    targets = [1, 2, 3]
+    values = [1, 1, 1]
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(pad=15, thickness=20,
+                  line=dict(color="black", width=0.5),
+                  label=labels, color="lightblue"),
+        link=dict(source=sources, target=targets, value=values,
+                  label=[f"{case} vitals", "Protocol Trigger", protocol["topic"]])
+    )])
+    fig.update_layout(title_text="🔄 MQTT Protocol Flow", font_size=12)
     return fig
 
 # ---------------- PDF Report ---------------- #
@@ -116,6 +131,9 @@ def generate_pdf_report(case_id, vitals, protocol):
     for action in protocol["actions"]:
         elements.append(Paragraph(f"• {action}", styles['Normal']))
     elements.append(Spacer(1, 18))
+    elements.append(Paragraph("<b>MQTT Explanation:</b><br/>"
+        "MQTT enables publish-subscribe communication between sensors, AI engine, and IoT devices. "
+        "This ensures low-latency emergency response in ICU.", styles['BodyText']))
     doc.build(elements)
     buffer.seek(0)
     return buffer
@@ -123,7 +141,7 @@ def generate_pdf_report(case_id, vitals, protocol):
 # ---------------- Email Alerts ---------------- #
 def send_email(subject, body, to_email):
     from_email = "your_email@gmail.com"
-    password = "your_app_password"  # Use App Password for Gmail
+    password = "your_app_password"  # Use Gmail App Password
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = from_email
@@ -160,20 +178,29 @@ if case_id:
     st.markdown("### 📈 Vitals Chart")
     st.plotly_chart(plot_vitals(vitals), use_container_width=True)
 
+    st.markdown("### 🔄 MQTT Flow")
+    st.plotly_chart(mqtt_flow_diagram(protocol["title"], protocol), use_container_width=True)
+
+    st.markdown("### 📜 Message Log")
+    st.code(f"""
+    [Sensor] Published → {vitals}
+    [Broker] Delivered to AI Engine
+    [AI Engine] Generated Protocol → {protocol['title']}
+    [Broker] Published to {protocol['topic']}
+    [Device] Actions Taken → {', '.join(protocol['actions'])}
+    """)
+
     if protocol["critical"]:
         alarm_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"
         st.markdown(f'<audio autoplay src="{alarm_url}" controls hidden></audio>', unsafe_allow_html=True)
 
-    # Email Alert Option
     if st.checkbox("📧 Send Email Alert to Doctor"):
         send_email(protocol["title"], protocol["explanation"], "doctor_email@hospital.com")
 
-    # PDF Export
     pdf = generate_pdf_report(case_id, vitals, protocol)
     st.download_button("📄 Download Case Report (PDF)", data=pdf,
                        file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
 
-    # Log Download
     log_data = pd.DataFrame([{"Patient": selected_patient, "Case": protocol["title"],
                               "Topic": protocol["topic"], "HR": vitals["HR"],
                               "SpO2": vitals["SpO2"], "Glucose": vitals["Glucose"],
@@ -184,5 +211,5 @@ if case_id:
                        file_name="icu_log.csv", mime="text/csv")
 
 st.markdown("---")
-st.caption("📡 Impunity Protocol Engine | Smart ICU Simulation | MQTT-Powered | Enhanced Features")
+st.caption("📡 Impunity Protocol Engine | Smart ICU Simulation | MQTT-Powered | Enhanced Graphical Features")
 
