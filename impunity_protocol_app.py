@@ -9,6 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+import pathlib
 
 # --- Translation dictionaries
 translations = {
@@ -128,11 +129,14 @@ t = translations[current_lang]
 
 st.title(t["page_title"])
 
-# Load avatars locally - place images in ./avatars/avatar1.png etc.
+# ----------------------------------------------------------------------------------------------------------------
+# Use pathlib to construct absolute paths for images to avoid path issues
+BASE_DIR = pathlib.Path(__file__).parent.resolve()
+
 patients = {
-    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "avatars/avatar1.png"},
-    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "avatars/avatar2.png"},
-    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "avatars/avatar3.png"},
+    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": BASE_DIR / "avatars" / "avatar1.png"},
+    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": BASE_DIR / "avatars" / "avatar2.png"},
+    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": BASE_DIR / "avatars" / "avatar3.png"},
 }
 
 selected_patient = st.sidebar.selectbox(t["select_patient"], list(patients.keys()))
@@ -140,15 +144,16 @@ new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, val
 patients[selected_patient]["Age"] = new_age
 patient = patients[selected_patient]
 
-# Show avatar image locally with fallback placeholder
+# Load and display avatar image with exception handling
 try:
     img = Image.open(patient["Avatar"])
     st.sidebar.image(img, width=70)
-except Exception:
+except Exception as e:
     fallback_avatar = "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_placeholder.png"
     st.sidebar.image(fallback_avatar, width=70)
+    st.sidebar.error(f"Avatar image failed to load: {e}")
 
-# Patient Details
+# Patient info
 st.sidebar.markdown(f"""
 <div class="glass-card">
 <b>Patient ID:</b> {selected_patient}<br>
@@ -159,13 +164,13 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Feedback email function (replace sender, password for real use)
+# Feedback email function (replace your_email and app_password before use)
 def send_feedback_email(name, email, message):
     subject = "ICU Simulator Feedback Received"
     body = f"Name: {name}\nEmail: {email}\nMessage: {message}"
-    sender = "your_email@gmail.com"          # Replace with real email
+    sender = "your_email@gmail.com"          # Replace with your Gmail address
     recipient = "sapban92@gmai.com"
-    password = "your_app_password_here"      # Replace with Gmail app password
+    password = "your_app_password_here"      # Replace with your Gmail App Password
 
     msg = MIMEText(body)
     msg['Subject'] = subject
@@ -174,17 +179,16 @@ def send_feedback_email(name, email, message):
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.ehlo()
         server.starttls()
         server.login(sender, password)
         server.sendmail(sender, recipient, msg.as_string())
         server.quit()
         return True
     except Exception as e:
-        print(f"Email sending error: {e}")
+        st.sidebar.error(f"Error sending email: {e}")
         return False
 
-# Feedback Form
+# Feedback form
 with st.sidebar.form("feedback_form"):
     st.subheader(t["feedback"])
     name = st.text_input(t["your_name"])
@@ -201,7 +205,8 @@ with st.sidebar.form("feedback_form"):
         else:
             st.sidebar.error(t["feedback_not_sent"])
 
-# Functions from previous example for predictions, protocols, charts, etc.
+# Functions for vitals, protocols etc. (same as previous)
+
 def predict_risk(vitals, patient):
     risk = 0
     risk += 1 if patient["Diabetic"] and vitals["Glucose"] < 70 else 0
@@ -310,7 +315,8 @@ def generate_pdf_report(case_id, vitals, protocol):
     buffer.seek(0)
     return buffer
 
-# Main Interface
+# Main interface
+
 st.markdown(f"<div class='glass-card'><h3>{t['choose_case']}</h3></div>", unsafe_allow_html=True)
 cols = st.columns(5)
 labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
