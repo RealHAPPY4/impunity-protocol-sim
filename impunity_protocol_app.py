@@ -9,40 +9,117 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-# --- Page Config and Theme
-st.set_page_config(page_title="ICU Futuristic MQTT Simulator", layout="wide", initial_sidebar_state="expanded")
-st.markdown("""
-<style>
-.glass-card {
-background: rgba(255, 255, 255, 0.22);
-box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-backdrop-filter: blur(12px);
-border-radius: 12px;
-border: 1px solid rgba(255, 255, 255, 0.18);
-padding: 18px 20px;
-margin-top: 12px;
-margin-bottom: 12px;
+# --- Translation dictionaries
+translations = {
+    "English": {
+        "page_title": "ICU Futuristic MQTT Simulator",
+        "interface_language": "🌐 Interface Language",
+        "select_patient": "👤 Select Patient",
+        "patient_profile": "### Patient Profile",
+        "edit_age": "Edit Age",
+        "diabetic": "Diabetic",
+        "allergies": "Allergies",
+        "history": "History",
+        "feedback": "💬 Feedback",
+        "your_name": "Your Name",
+        "your_email": "Your Email",
+        "feedback_message": "Feedback Message",
+        "submit": "Submit",
+        "feedback_saved": "✅ Feedback saved and emailed!",
+        "feedback_not_sent": "❌ Feedback saved, but email not sent.",
+        "choose_case": "🚑 Futuristic Emergency Simulator\nChoose a case:",
+        "actions_taken": "### ✅ Actions Taken",
+        "vitals_chart": "### 📈 Vitals Chart",
+        "mqtt_flow": "### 🔄 MQTT Flow",
+        "protocol_timeline": "### ⏳ Protocol Timeline",
+        "risk_prediction": "### 🚦 Risk Prediction",
+        "critical_event_probability": "Critical Event Probability",
+        "message_log": "### 📜 Message Log",
+        "download_pdf": "📄 Download Case Report (PDF)",
+        "download_csv": "📥 Download Session Log (CSV)",
+        "mqtt_topic": "**📡 MQTT Topic:**",
+        "broker_status": "🌐 MQTT Broker Status",
+        "latency": "Latency: 100 ms",
+        "cluster_mode": "Cluster Mode: Active",
+        "throughput": "Throughput: 500 msg/sec",
+        "qos": "QoS Level: 2",
+        "online_devices": "Device Online: 24",
+        "session_expiry": "Session Expiry: 10 min",
+        "app_caption": "📡 Futuristic MQTT Brokerage | Smart ICU Simulation | AI & Animated Protocols | Augmented Graphical Engine",
+    },
+    "हिन्दी": {
+        "page_title": "आईसीयू फ्यूचरिस्टिक MQTT सिम्युलेटर",
+        "interface_language": "🌐 इंटरफ़ेस भाषा",
+        "select_patient": "👤 मरीज चुनें",
+        "patient_profile": "### मरीज प्रोफाइल",
+        "edit_age": "आयु बदलें",
+        "diabetic": "मधुमेही",
+        "allergies": "एलर्जी",
+        "history": "इतिहास",
+        "feedback": "💬 प्रतिक्रिया",
+        "your_name": "आपका नाम",
+        "your_email": "आपका ईमेल",
+        "feedback_message": "संदेश",
+        "submit": "जमा करें",
+        "feedback_saved": "✅ प्रतिक्रिया सहेज ली गई और ईमेल कर दी गई!",
+        "feedback_not_sent": "❌ प्रतिक्रिया सहेज ली गई, लेकिन ईमेल भेजी नहीं गई।",
+        "choose_case": "🚑 फ्यूचरिस्टिक इमरजेंसी सिम्युलेटर\nएक केस चुनें:",
+        "actions_taken": "### ✅ लिए गए कार्य",
+        "vitals_chart": "### 📈 जीवन संकेत चार्ट",
+        "mqtt_flow": "### 🔄 MQTT प्रवाह",
+        "protocol_timeline": "### ⏳ प्रोटोकॉल टाइमलाइन",
+        "risk_prediction": "### 🚦 जोखिम अनुमान",
+        "critical_event_probability": "गंभीर घटना की संभावना",
+        "message_log": "### 📜 संदेश लॉग",
+        "download_pdf": "📄 केस रिपोर्ट डाउनलोड करें (PDF)",
+        "download_csv": "📥 सत्र लॉग डाउनलोड करें (CSV)",
+        "mqtt_topic": "**📡 MQTT विषय:**",
+        "broker_status": "🌐 MQTT दलाल स्थिति",
+        "latency": "लेटेंसी: 100 मि.से.",
+        "cluster_mode": "क्लस्टर मोड: सक्रिय",
+        "throughput": "थ्रूपुट: 500 संदेश/सेकंड",
+        "qos": "QoS स्तर: 2",
+        "online_devices": "ऑनलाइन डिवाइस: 24",
+        "session_expiry": "सत्र समाप्ति: 10 मिनट",
+        "app_caption": "📡 फ्यूचरिस्टिक MQTT दलाली | स्मार्ट ICU सिम्युलेशन | एआई और एनिमेटेड प्रोटोकॉल | संवर्धित ग्राफिकल इंजन",
+    },
+    # Add more languages here...
 }
-.avatar-img {width:70px;height:70px;border-radius:50%;}
-.metric-badge {border-radius:10px;padding:5px 15px;font-size:18px;}
-.metric-green {background:#c8ffc8;}
-.metric-yellow {background:#ffffc8;}
-.metric-red {background:#ffc8c8;}
-</style>
-""", unsafe_allow_html=True)
 
-# --- Multilingual Toggle
-lang = st.selectbox("🌐 Interface Language", ["English", "हिन्दी", "Español", "中文"], index=0)
+# ---- UI language selector ----
+current_lang = st.sidebar.selectbox(
+    translations["English"]["interface_language"],
+    list(translations.keys()),
+    key="lang_select"
+)
+t = translations[current_lang]
 
-# --- Patient Profiles, Avatars
+st.set_page_config(page_title=t["page_title"], layout="wide", initial_sidebar_state="expanded")
+st.markdown(f"<h2>{t['page_title']}</h2>", unsafe_allow_html=True)
+
+# --- Patient Profiles, Avatars, Age Editable
 patients = {
     "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "https://i.ibb.co/rMsKmGL/avatar1.png"},
     "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "https://i.ibb.co/3hz3cRP/avatar2.png"},
     "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "https://i.ibb.co/MpJTDkF/avatar3.png"}
 }
-selected_patient = st.sidebar.selectbox("👤 Select Patient", list(patients.keys()))
+
+selected_patient = st.sidebar.selectbox(t["select_patient"], list(patients.keys()))
+# Age control
+new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, value=patients[selected_patient]["Age"], key='edit_age')
+patients[selected_patient]["Age"] = new_age # update age live
+
 patient = patients[selected_patient]
-st.sidebar.markdown(f"<div class='glass-card'><img src='{patient['Avatar']}' class='avatar-img'/><br><b>Patient ID:</b> {selected_patient}<br><b>Age:</b> {patient['Age']}<br><b>Diabetic:</b> {'Yes' if patient['Diabetic'] else 'No'}<br><b>Allergies:</b> {', '.join(patient['Allergies']) if patient['Allergies'] else 'None'}<br><b>History:</b> {patient['History']}</div>", unsafe_allow_html=True)
+st.sidebar.markdown(f"""
+<div class='glass-card'>
+    <img src='{patient['Avatar']}' class='avatar-img'/><br>
+    <b>Patient ID:</b> {selected_patient}<br>
+    <b>{t['edit_age']}:</b> {patient['Age']}<br>
+    <b>{t['diabetic']}:</b> {"Yes" if patient["Diabetic"] else "No"}<br>
+    <b>{t['allergies']}:</b> {', '.join(patient['Allergies']) if patient['Allergies'] else 'None'}<br>
+    <b>{t['history']}:</b> {patient['History']}
+</div>
+""", unsafe_allow_html=True)
 
 # --- Feedback Email Function
 def send_feedback_email(name, email, message):
@@ -69,21 +146,21 @@ def send_feedback_email(name, email, message):
         print(f"Error sending email: {e}")
         return False
 
-# --- Feedback Form, Notification
+# --- Feedback Form with Multilingual Labels
 with st.sidebar.form("feedback_form"):
-    name = st.text_input("Your Name")
-    email = st.text_input("Your Email")
-    message = st.text_area("Feedback Message")
-    submitted = st.form_submit_button("Submit")
+    name = st.text_input(t["your_name"])
+    email = st.text_input(t["your_email"])
+    message = st.text_area(t["feedback_message"])
+    submitted = st.form_submit_button(t["submit"])
     if submitted:
         with open("feedback_log.csv", "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([name, email, message, datetime.now().isoformat()])
         mail_success = send_feedback_email(name, email, message)
         if mail_success:
-            st.sidebar.success("✅ Feedback saved and emailed!")
+            st.sidebar.success(t["feedback_saved"])
         else:
-            st.sidebar.error("❌ Feedback saved, but email not sent.")
+            st.sidebar.error(t["feedback_not_sent"])
 
 # --- Risk Prediction Model (Dummy ML Example)
 def predict_risk(vitals, patient):
@@ -91,7 +168,7 @@ def predict_risk(vitals, patient):
     risk += 1 if patient["Diabetic"] and vitals["Glucose"] < 70 else 0
     risk += 1 if vitals["HR"] < 40 or vitals["SpO2"] < 85 else 0
     risk += 1 if vitals["Movement"] and "Coma" in str(patient["History"]) else 0
-    return min(risk, 3) # 0:Low, 1:Moderate, 2:High, 3:Critical
+    return min(risk, 3)  # 0:Low, 1:Moderate, 2:High, 3:Critical
 
 # --- Vitals Simulation
 def simulate_vitals(case_id):
@@ -133,17 +210,17 @@ def plot_vitals(vitals):
 
 # --- MQTT Broker Advanced Visualization Panel
 def mqtt_stats_panel():
-    st.markdown("<div class='glass-card'><h4>🌐 MQTT Broker Status</h4>", unsafe_allow_html=True)
+    st.markdown(f"<div class='glass-card'><h4>{t['broker_status']}</h4>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("<span class='metric-badge metric-green'>Latency: 100 ms</span>", unsafe_allow_html=True)
-        st.markdown("<span class='metric-badge metric-green'>Cluster Mode: Active</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-green'>{t['latency']}</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-green'>{t['cluster_mode']}</span>", unsafe_allow_html=True)
     with col2:
-        st.markdown("<span class='metric-badge metric-yellow'>Throughput: 500 msg/sec</span>", unsafe_allow_html=True)
-        st.markdown("<span class='metric-badge metric-green'>QoS Level: 2</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-yellow'>{t['throughput']}</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-green'>{t['qos']}</span>", unsafe_allow_html=True)
     with col3:
-        st.markdown("<span class='metric-badge metric-green'>Device Online: 24</span>", unsafe_allow_html=True)
-        st.markdown("<span class='metric-badge metric-yellow'>Session Expiry: 10 min</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-green'>{t['online_devices']}</span>", unsafe_allow_html=True)
+        st.markdown(f"<span class='metric-badge metric-yellow'>{t['session_expiry']}</span>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- MQTT Protocol Advanced Sankey Flow
@@ -177,7 +254,7 @@ def generate_pdf_report(case_id, vitals, protocol):
     styles = getSampleStyleSheet()
     elements = [Paragraph("🧠 ICU Emergency Report", styles['Title']), Spacer(1, 12)]
     elements += [
-        Paragraph(f"<b>Patient ID:</b> {selected_patient} &nbsp;&nbsp; <b>Age:</b> {patient['Age']}", styles['Normal']),
+        Paragraph(f"<b>Patient ID:</b> {selected_patient} &nbsp;&nbsp; <b>Age:</b> {patients[selected_patient]['Age']}", styles['Normal']),
         Spacer(1, 12),
         Paragraph(f"<b>Case:</b> {protocol['title']}", styles['Heading3']),
         Paragraph(protocol['explanation'], styles['BodyText']),
@@ -201,11 +278,11 @@ def generate_pdf_report(case_id, vitals, protocol):
     buffer.seek(0)
     return buffer
 
-# --- Main Interactive Interface: Glass Buttons, Real-Time Metrics
-st.markdown("<div class='glass-card'><h2>🚑 Futuristic Emergency Simulator</h2><p>Choose a case:</p></div>", unsafe_allow_html=True)
+# --- Main Interactive Interface
+st.markdown(f"<div class='glass-card'><h3>{t['choose_case']}</h3></div>", unsafe_allow_html=True)
 cols = st.columns(5)
 labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
-case_id = 0
+case_id = None
 for i, col in enumerate(cols):
     if col.button(labels[i]):
         case_id = i + 1
@@ -214,30 +291,29 @@ if case_id:
     vitals = simulate_vitals(case_id)
     protocol = generate_case_protocol(case_id, vitals)
     risk = predict_risk(vitals, patient)
-    
-    # Glassmorphism headline, sound alert
+
     st.markdown(f"<div class='glass-card'><h3>{protocol['title']}</h3><p style='color:green;'>{protocol['explanation']}</p></div>", unsafe_allow_html=True)
-    st.markdown(f"**📡 MQTT Topic:** `{protocol['topic']}`")
-    mqtt_stats_panel()  # Advanced broker panel
-    
-    st.markdown("### ✅ Actions Taken")
+    st.markdown(f"{t['mqtt_topic']} `{protocol['topic']}`")
+    mqtt_stats_panel()
+
+    st.markdown(t["actions_taken"])
     for i, action in enumerate(protocol["actions"], 1):
         st.markdown(f"{i}. {action}")
-    
-    st.markdown("### 📈 Vitals Chart")
+
+    st.markdown(t["vitals_chart"])
     st.plotly_chart(plot_vitals(vitals), use_container_width=True)
-    
-    st.markdown("### 🔄 MQTT Flow")
+
+    st.markdown(t["mqtt_flow"])
     st.plotly_chart(mqtt_flow_diagram(protocol["title"], protocol), use_container_width=True)
-    
-    st.markdown("### ⏳ Protocol Timeline")
+
+    st.markdown(t["protocol_timeline"])
     protocol_timeline(protocol["title"], protocol, vitals)
-    
-    st.markdown("### 🚦 Risk Prediction")
+
+    st.markdown(t["risk_prediction"])
     risk_level = ["Low", "Moderate", "High", "Critical"][risk]
-    st.metric("Critical Event Probability", risk_level)
-    
-    st.markdown("### 📜 Message Log")
+    st.metric(t["critical_event_probability"], risk_level)
+
+    st.markdown(t["message_log"])
     st.code(f"""
     [Sensor] Published → {vitals}
     [Broker] Delivered to AI Engine
@@ -248,19 +324,24 @@ if case_id:
     if protocol["critical"]:
         alarm_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"
         st.markdown(f'<audio autoplay src="{alarm_url}" controls hidden></audio>', unsafe_allow_html=True)
-    
-    if st.checkbox("📧 Send Email Alert to Doctor"):
-        # Place your email sending code here (credentials omitted for safety)
-        st.info("📧 Email alert sent (simulated)!")
-        
+
     pdf = generate_pdf_report(case_id, vitals, protocol)
-    st.download_button("📄 Download Case Report (PDF)", data=pdf, file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
-    
-    log_data = pd.DataFrame([{"Patient": selected_patient, "Case": protocol["title"], "Topic": protocol["topic"], "HR": vitals["HR"], "SpO2": vitals["SpO2"], "Glucose": vitals["Glucose"], "Movement": vitals["Movement"], "Risk": risk_level}])
+    st.download_button(t["download_pdf"], data=pdf, file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
+
+    log_data = pd.DataFrame([{
+        "Patient": selected_patient,
+        "Case": protocol["title"],
+        "Topic": protocol["topic"],
+        "HR": vitals["HR"],
+        "SpO2": vitals["SpO2"],
+        "Glucose": vitals["Glucose"],
+        "Movement": vitals["Movement"],
+        "Risk": risk_level,
+        "Age": patients[selected_patient]["Age"]
+    }])
     csv_buf = io.StringIO()
     log_data.to_csv(csv_buf, index=False)
-    st.download_button("📥 Download Session Log (CSV)", data=csv_buf.getvalue(), file_name="icu_log.csv", mime="text/csv")
+    st.download_button(t["download_csv"], data=csv_buf.getvalue(), file_name="icu_log.csv", mime="text/csv")
 
 st.markdown("---")
-st.caption("📡 Futuristic MQTT Brokerage | Smart ICU Simulation | AI & Animated Protocols | Augmented Graphical Engine")
-
+st.caption(t["app_caption"])
