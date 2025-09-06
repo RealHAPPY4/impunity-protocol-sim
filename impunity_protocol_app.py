@@ -83,51 +83,93 @@ translations = {
         "session_expiry": "सत्र समाप्ति: 10 मिनट",
         "app_caption": "📡 फ्यूचरिस्टिक MQTT दलाली | स्मार्ट ICU सिम्युलेशन | एआई और एनिमेटेड प्रोटोकॉल | संवर्धित ग्राफिकल इंजन",
     },
-    # Add more languages here...
 }
 
-# ---- UI language selector ----
+# --- Styles injected for glassmorphism and avatars
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+<style>
+.glass-card {
+    background: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 18px 20px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+.avatar-img {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.metric-badge {
+    border-radius: 10px;
+    padding: 5px 15px;
+    font-size: 18px;
+}
+.metric-green {
+    background:#c8ffc8;
+}
+.metric-yellow {
+    background:#ffffc8;
+}
+.metric-red {
+    background:#ffc8c8;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Language selector
 current_lang = st.sidebar.selectbox(
-    translations["English"]["interface_language"],
+    "🌐 Interface Language",
     list(translations.keys()),
     key="lang_select"
 )
 t = translations[current_lang]
 
-st.set_page_config(page_title=t["page_title"], layout="wide", initial_sidebar_state="expanded")
-st.markdown(f"<h2>{t['page_title']}</h2>", unsafe_allow_html=True)
+st.title(t["page_title"])
 
-# --- Patient Profiles, Avatars, Age Editable
+# --- Patient Profiles with editable age and fallback avatar
 patients = {
-    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "https://i.ibb.co/rMsKmGL/avatar1.png"},
-    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "https://i.ibb.co/3hz3cRP/avatar2.png"},
-    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "https://i.ibb.co/MpJTDkF/avatar3.png"}
+    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar1.jpg"},
+    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar2.jpg"},
+    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar3.jpg"},
 }
 
 selected_patient = st.sidebar.selectbox(t["select_patient"], list(patients.keys()))
-# Age control
-new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, value=patients[selected_patient]["Age"], key='edit_age')
-patients[selected_patient]["Age"] = new_age # update age live
-
+new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, value=patients[selected_patient]["Age"])
+patients[selected_patient]["Age"] = new_age
 patient = patients[selected_patient]
+
+# Show avatar with fallback
+try:
+    st.sidebar.image(patient["Avatar"], width=70)
+except:
+    fallback_avatar = "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_placeholder.png"
+    st.sidebar.image(fallback_avatar, width=70)
+
+# Patient details below avatar
 st.sidebar.markdown(f"""
-<div class='glass-card'>
-    <img src='{patient['Avatar']}' class='avatar-img'/><br>
-    <b>Patient ID:</b> {selected_patient}<br>
-    <b>{t['edit_age']}:</b> {patient['Age']}<br>
-    <b>{t['diabetic']}:</b> {"Yes" if patient["Diabetic"] else "No"}<br>
-    <b>{t['allergies']}:</b> {', '.join(patient['Allergies']) if patient['Allergies'] else 'None'}<br>
-    <b>{t['history']}:</b> {patient['History']}
+<div class="glass-card">
+<b>Patient ID:</b> {selected_patient}<br>
+<b>{t['edit_age']}:</b> {patient['Age']}<br>
+<b>{t['diabetic']}:</b> {"Yes" if patient['Diabetic'] else "No"}<br>
+<b>{t['allergies']}:</b> {', '.join(patient['Allergies']) if patient['Allergies'] else 'None'}<br>
+<b>{t['history']}:</b> {patient['History']}
 </div>
 """, unsafe_allow_html=True)
 
-# --- Feedback Email Function
+# --- Email function
 def send_feedback_email(name, email, message):
     subject = "ICU Simulator Feedback Received"
     body = f"Name: {name}\nEmail: {email}\nMessage: {message}"
-    sender = "your_email@gmail.com"          # Replace with Gmail address
+    sender = "your_email@gmail.com"          # Replace with your email
     recipient = "sapban92@gmai.com"
-    password = "your_app_password_here"      # Use Gmail App Password
+    password = "your_app_password_here"      # Replace with Gmail App Password
 
     msg = MIMEText(body)
     msg['Subject'] = subject
@@ -146,8 +188,9 @@ def send_feedback_email(name, email, message):
         print(f"Error sending email: {e}")
         return False
 
-# --- Feedback Form with Multilingual Labels
+# --- Feedback form
 with st.sidebar.form("feedback_form"):
+    st.subheader(t["feedback"])
     name = st.text_input(t["your_name"])
     email = st.text_input(t["your_email"])
     message = st.text_area(t["feedback_message"])
@@ -156,21 +199,21 @@ with st.sidebar.form("feedback_form"):
         with open("feedback_log.csv", "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([name, email, message, datetime.now().isoformat()])
-        mail_success = send_feedback_email(name, email, message)
-        if mail_success:
+        sent = send_feedback_email(name, email, message)
+        if sent:
             st.sidebar.success(t["feedback_saved"])
         else:
             st.sidebar.error(t["feedback_not_sent"])
 
-# --- Risk Prediction Model (Dummy ML Example)
+# --- Other function definitions (risk prediction, simulate vitals, etc.) as before
+
 def predict_risk(vitals, patient):
     risk = 0
     risk += 1 if patient["Diabetic"] and vitals["Glucose"] < 70 else 0
     risk += 1 if vitals["HR"] < 40 or vitals["SpO2"] < 85 else 0
     risk += 1 if vitals["Movement"] and "Coma" in str(patient["History"]) else 0
-    return min(risk, 3)  # 0:Low, 1:Moderate, 2:High, 3:Critical
+    return min(risk, 3)
 
-# --- Vitals Simulation
 def simulate_vitals(case_id):
     return {
         1: {"HR": 82, "SpO2": 96, "Glucose": 61, "Movement": False},
@@ -180,7 +223,6 @@ def simulate_vitals(case_id):
         5: {"HR": 28, "SpO2": 76, "Glucose": 114, "Movement": False},
     }.get(case_id, {})
 
-# --- Protocol Engine
 def generate_case_protocol(case_id, vitals):
     protocols = {
         1: {"title": "CASE 1: Insulin Deficiency", "explanation": "Low glucose detected in diabetic patient. Emergency insulin protocol initiated.", "topic": "/ICU/devices/patient/inject_insulin", "actions": ["💉 Inject 6 units insulin", "📝 Update EHR", "📡 Notify ICU staff"]},
@@ -193,7 +235,6 @@ def generate_case_protocol(case_id, vitals):
     p["critical"] = True
     return p
 
-# --- Animated Vitals Chart
 def plot_vitals(vitals):
     df = pd.DataFrame({
         "Time": [f"T-{i}" for i in range(9, -1, -1)],
@@ -208,7 +249,6 @@ def plot_vitals(vitals):
     fig.update_layout(template="plotly_white", height=350, transition_duration=400)
     return fig
 
-# --- MQTT Broker Advanced Visualization Panel
 def mqtt_stats_panel():
     st.markdown(f"<div class='glass-card'><h4>{t['broker_status']}</h4>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
@@ -223,7 +263,6 @@ def mqtt_stats_panel():
         st.markdown(f"<span class='metric-badge metric-yellow'>{t['session_expiry']}</span>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- MQTT Protocol Advanced Sankey Flow
 def mqtt_flow_diagram(case, protocol):
     labels = ["Sensor", "MQTT Broker", "AI Engine", "IoT Device/Hospital"]
     sources = [0, 1, 2]
@@ -236,7 +275,6 @@ def mqtt_flow_diagram(case, protocol):
     fig.update_layout(title_text="🔄 MQTT Protocol Flow", font_size=12)
     return fig
 
-# --- Protocol Timeline with Timestamps
 def protocol_timeline(case, protocol, vitals):
     timeline = [
         {"Event": "Sensor Trigger", "Time": datetime.now().strftime("%H:%M:%S"), "Desc": f"Vitals: {vitals}"},
@@ -247,7 +285,6 @@ def protocol_timeline(case, protocol, vitals):
     timeline_df = pd.DataFrame(timeline)
     st.table(timeline_df)
 
-# --- PDF Report Generator
 def generate_pdf_report(case_id, vitals, protocol):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -278,7 +315,7 @@ def generate_pdf_report(case_id, vitals, protocol):
     buffer.seek(0)
     return buffer
 
-# --- Main Interactive Interface
+# --- Main Interface
 st.markdown(f"<div class='glass-card'><h3>{t['choose_case']}</h3></div>", unsafe_allow_html=True)
 cols = st.columns(5)
 labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
