@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import random, io, csv, smtplib
 from datetime import datetime
+from PIL import Image
 from email.mime.text import MIMEText
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -85,7 +86,7 @@ translations = {
     },
 }
 
-# --- Styles injected for glassmorphism and avatars
+# --- Styles (glassmorphism + metrics)
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
@@ -99,12 +100,6 @@ st.markdown("""
     padding: 18px 20px;
     margin-top: 12px;
     margin-bottom: 12px;
-}
-.avatar-img {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    object-fit: cover;
 }
 .metric-badge {
     border-radius: 10px;
@@ -123,7 +118,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Language selector
+# Language selector
 current_lang = st.sidebar.selectbox(
     "🌐 Interface Language",
     list(translations.keys()),
@@ -133,11 +128,11 @@ t = translations[current_lang]
 
 st.title(t["page_title"])
 
-# --- Patient Profiles with editable age and fallback avatar
+# Load avatars locally - place images in ./avatars/avatar1.png etc.
 patients = {
-    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar1.jpg"},
-    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar2.jpg"},
-    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "https://raw.githubusercontent.com/streamlit/streamlit/develop/frontend/public/sample-data/avatars/avatar3.jpg"},
+    "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": "avatars/avatar1.png"},
+    "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": "avatars/avatar2.png"},
+    "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": "avatars/avatar3.png"},
 }
 
 selected_patient = st.sidebar.selectbox(t["select_patient"], list(patients.keys()))
@@ -145,14 +140,15 @@ new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, val
 patients[selected_patient]["Age"] = new_age
 patient = patients[selected_patient]
 
-# Show avatar with fallback
+# Show avatar image locally with fallback placeholder
 try:
-    st.sidebar.image(patient["Avatar"], width=70)
-except:
+    img = Image.open(patient["Avatar"])
+    st.sidebar.image(img, width=70)
+except Exception:
     fallback_avatar = "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_placeholder.png"
     st.sidebar.image(fallback_avatar, width=70)
 
-# Patient details below avatar
+# Patient Details
 st.sidebar.markdown(f"""
 <div class="glass-card">
 <b>Patient ID:</b> {selected_patient}<br>
@@ -163,13 +159,13 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Email function
+# Feedback email function (replace sender, password for real use)
 def send_feedback_email(name, email, message):
     subject = "ICU Simulator Feedback Received"
     body = f"Name: {name}\nEmail: {email}\nMessage: {message}"
-    sender = "your_email@gmail.com"          # Replace with your email
+    sender = "your_email@gmail.com"          # Replace with real email
     recipient = "sapban92@gmai.com"
-    password = "your_app_password_here"      # Replace with Gmail App Password
+    password = "your_app_password_here"      # Replace with Gmail app password
 
     msg = MIMEText(body)
     msg['Subject'] = subject
@@ -185,10 +181,10 @@ def send_feedback_email(name, email, message):
         server.quit()
         return True
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"Email sending error: {e}")
         return False
 
-# --- Feedback form
+# Feedback Form
 with st.sidebar.form("feedback_form"):
     st.subheader(t["feedback"])
     name = st.text_input(t["your_name"])
@@ -205,8 +201,7 @@ with st.sidebar.form("feedback_form"):
         else:
             st.sidebar.error(t["feedback_not_sent"])
 
-# --- Other function definitions (risk prediction, simulate vitals, etc.) as before
-
+# Functions from previous example for predictions, protocols, charts, etc.
 def predict_risk(vitals, patient):
     risk = 0
     risk += 1 if patient["Diabetic"] and vitals["Glucose"] < 70 else 0
@@ -315,7 +310,7 @@ def generate_pdf_report(case_id, vitals, protocol):
     buffer.seek(0)
     return buffer
 
-# --- Main Interface
+# Main Interface
 st.markdown(f"<div class='glass-card'><h3>{t['choose_case']}</h3></div>", unsafe_allow_html=True)
 cols = st.columns(5)
 labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
