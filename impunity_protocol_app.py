@@ -44,6 +44,31 @@ selected_patient = st.sidebar.selectbox("👤 Select Patient", list(patients.key
 patient = patients[selected_patient]
 st.sidebar.markdown(f"<div class='glass-card'><img src='{patient['Avatar']}' class='avatar-img'/><br><b>Patient ID:</b> {selected_patient}<br><b>Age:</b> {patient['Age']}<br><b>Diabetic:</b> {'Yes' if patient['Diabetic'] else 'No'}<br><b>Allergies:</b> {', '.join(patient['Allergies']) if patient['Allergies'] else 'None'}<br><b>History:</b> {patient['History']}</div>", unsafe_allow_html=True)
 
+# --- Feedback Email Function
+def send_feedback_email(name, email, message):
+    subject = "ICU Simulator Feedback Received"
+    body = f"Name: {name}\nEmail: {email}\nMessage: {message}"
+    sender = "your_email@gmail.com"          # Replace with Gmail address
+    recipient = "sapban92@gmai.com"
+    password = "your_app_password_here"      # Use Gmail App Password
+
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = recipient
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.ehlo()
+        server.starttls()
+        server.login(sender, password)
+        server.sendmail(sender, recipient, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
 # --- Feedback Form, Notification
 with st.sidebar.form("feedback_form"):
     name = st.text_input("Your Name")
@@ -54,7 +79,11 @@ with st.sidebar.form("feedback_form"):
         with open("feedback_log.csv", "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([name, email, message, datetime.now().isoformat()])
-        st.sidebar.success("✅ Feedback saved!")
+        mail_success = send_feedback_email(name, email, message)
+        if mail_success:
+            st.sidebar.success("✅ Feedback saved and emailed!")
+        else:
+            st.sidebar.error("❌ Feedback saved, but email not sent.")
 
 # --- Risk Prediction Model (Dummy ML Example)
 def predict_risk(vitals, patient):
@@ -141,7 +170,7 @@ def protocol_timeline(case, protocol, vitals):
     timeline_df = pd.DataFrame(timeline)
     st.table(timeline_df)
 
-# --- PDF Report Generator (as before)
+# --- PDF Report Generator
 def generate_pdf_report(case_id, vitals, protocol):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -172,7 +201,7 @@ def generate_pdf_report(case_id, vitals, protocol):
     buffer.seek(0)
     return buffer
 
-# --- Main Interactive Interface: Glass Buttons, Real-Time Metrics, Protocol Event Controls
+# --- Main Interactive Interface: Glass Buttons, Real-Time Metrics
 st.markdown("<div class='glass-card'><h2>🚑 Futuristic Emergency Simulator</h2><p>Choose a case:</p></div>", unsafe_allow_html=True)
 cols = st.columns(5)
 labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
@@ -234,5 +263,4 @@ if case_id:
 
 st.markdown("---")
 st.caption("📡 Futuristic MQTT Brokerage | Smart ICU Simulation | AI & Animated Protocols | Augmented Graphical Engine")
-
 
