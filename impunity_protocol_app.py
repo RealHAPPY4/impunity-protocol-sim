@@ -1,14 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import random, io, csv
+import random, io, csv, smtplib
 from datetime import datetime
 from PIL import Image
+from email.mime.text import MIMEText
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-import pathlib, requests, os
+import pathlib
 
 # --- Translation dictionaries
 translations = {
@@ -106,31 +107,44 @@ st.markdown("""
     padding: 5px 15px;
     font-size: 18px;
 }
-.metric-green { background:#c8ffc8; }
-.metric-yellow { background:#ffffc8; }
-.metric-red { background:#ffc8c8; }
+.metric-green {
+    background:#c8ffc8;
+}
+.metric-yellow {
+    background:#ffffc8;
+}
+.metric-red {
+    background:#ffc8c8;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # Language selector
-current_lang = st.sidebar.selectbox("🌐 Interface Language", list(translations.keys()), key="lang_select")
+current_lang = st.sidebar.selectbox(
+    "🌐 Interface Language",
+    list(translations.keys()),
+    key="lang_select"
+)
 t = translations[current_lang]
 
 st.title(t["page_title"])
 
-# --- Patients
+# ----------------------------------------------------------------------------------------------------------------
+# Use pathlib to construct absolute paths for images to avoid path issues
 BASE_DIR = pathlib.Path(__file__).parent.resolve()
+
 patients = {
     "PATIENT_05": {"Age": 67, "Diabetic": True, "Allergies": ["Penicillin"], "History": "Coma (3 days)", "Avatar": BASE_DIR / "avatars" / "avatar1.png"},
     "PATIENT_12": {"Age": 54, "Diabetic": False, "Allergies": [], "History": "Hypertension", "Avatar": BASE_DIR / "avatars" / "avatar2.png"},
     "PATIENT_21": {"Age": 73, "Diabetic": True, "Allergies": ["Sulfa"], "History": "Post-surgery", "Avatar": BASE_DIR / "avatars" / "avatar3.png"},
 }
+
 selected_patient = st.sidebar.selectbox(t["select_patient"], list(patients.keys()))
 new_age = st.sidebar.number_input(t["edit_age"], min_value=1, max_value=120, value=patients[selected_patient]["Age"])
 patients[selected_patient]["Age"] = new_age
 patient = patients[selected_patient]
 
-# Avatar
+# Load and display avatar image with exception handling
 try:
     img = Image.open(patient["Avatar"])
     st.sidebar.image(img, width=70)
@@ -150,29 +164,31 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Feedback email function (Brevo API)
+# Feedback email function (replace your_email and app_password before use)
 def send_feedback_email(name, email, message):
-    url = "https://api.brevo.com/v3/smtp/email"
-    api_key = os.getenv("BREVO_API_KEY")  # Streamlit Secrets
-    headers = {
-        "accept": "application/json",
-        "api-key": api_key,
-        "content-type": "application/json"
-    }
-    payload = {
-        "sender": {"name": "ICU Simulator", "email": "no-reply@icu-sim.com"},
-        "to": [{"email": "sapban92@gmail.com"}],
-        "subject": "ICU Simulator Feedback Received",
-        "htmlContent": f"<p><b>Name:</b> {name}<br><b>Email:</b> {email}<br><b>Message:</b> {message}</p>"
-    }
+    subject = "ICU Simulator Feedback Received"
+    body = f"Name: {name}\nEmail: {email}\nMessage: {message}"
+    sender = "your_email@gmail.com"          # Replace with your Gmail address
+    recipient = "sapban92@gmai.com"
+    password = "your_app_password_here"      # Replace with your Gmail App Password
+
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = recipient
+
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        return response.status_code == 201
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender, password)
+        server.sendmail(sender, recipient, msg.as_string())
+        server.quit()
+        return True
     except Exception as e:
         st.sidebar.error(f"Error sending email: {e}")
         return False
 
-# --- Feedback form
+# Feedback form
 with st.sidebar.form("feedback_form"):
     st.subheader(t["feedback"])
     name = st.text_input(t["your_name"])
@@ -180,18 +196,17 @@ with st.sidebar.form("feedback_form"):
     message = st.text_area(t["feedback_message"])
     submitted = st.form_submit_button(t["submit"])
     if submitted:
-        # Save to CSV
         with open("feedback_log.csv", "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([name, email, message, datetime.now().isoformat()])
-        # Send via Brevo
         sent = send_feedback_email(name, email, message)
         if sent:
             st.sidebar.success(t["feedback_saved"])
         else:
             st.sidebar.error(t["feedback_not_sent"])
 
-# --- Functions for vitals, protocols etc.
+# Functions for vitals, protocols etc. (same as previous)
+
 def predict_risk(vitals, patient):
     risk = 0
     risk += 1 if patient["Diabetic"] and vitals["Glucose"] < 70 else 0
@@ -293,48 +308,78 @@ def generate_pdf_report(case_id, vitals, protocol):
     elements.append(Spacer(1, 18))
     elements.append(Paragraph("<b>Actions Taken:</b>", styles['Heading4']))
     for action in protocol["actions"]:
-        elements.append(Paragraph(f"• {action}", styles['BodyText']))
+        elements.append(Paragraph(f"• {action}", styles['Normal']))
+    elements.append(Spacer(1, 18))
+    elements.append(Paragraph("<b>MQTT Explanation:</b><br/>MQTT ensures low-latency emergency response in ICU.", styles['BodyText']))
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-def download_csv_log():
-    df = pd.DataFrame({"Timestamp": [datetime.now().isoformat()],
-                       "Patient": [selected_patient],
-                       "Case": [st.session_state.get('current_case', 'N/A')],
-                       "Vitals": [st.session_state.get('last_vitals', {})],
-                       "Protocol": [st.session_state.get('last_protocol', {}).get('title', 'N/A')]})
-    return df.to_csv(index=False).encode("utf-8")
+# Main interface
 
-# --- Case selection
-case_options = {1: "Case 1: Insulin Deficiency", 2: "Case 2: Drug Not Available", 3: "Case 3: Patient Awakens", 4: "Case 4: Oxygen Deficiency", 5: "Case 5: Cardiac Arrest"}
-case_id = st.selectbox(t["choose_case"], list(case_options.keys()), format_func=lambda x: case_options[x])
+st.markdown(f"<div class='glass-card'><h3>{t['choose_case']}</h3></div>", unsafe_allow_html=True)
+cols = st.columns(5)
+labels = ["🩺 Case 1", "💊 Case 2", "🧠 Case 3", "🫁 Case 4", "💔 Case 5"]
+case_id = None
+for i, col in enumerate(cols):
+    if col.button(labels[i]):
+        case_id = i + 1
 
 if case_id:
     vitals = simulate_vitals(case_id)
-    st.session_state['last_vitals'] = vitals
     protocol = generate_case_protocol(case_id, vitals)
-    st.session_state['last_protocol'] = protocol
-    st.session_state['current_case'] = case_id
-    st.markdown(f"### {protocol['title']}")
-    st.write(protocol["explanation"])
+    risk = predict_risk(vitals, patient)
+
+    st.markdown(f"<div class='glass-card'><h3>{protocol['title']}</h3><p style='color:green;'>{protocol['explanation']}</p></div>", unsafe_allow_html=True)
+    st.markdown(f"{t['mqtt_topic']} `{protocol['topic']}`")
+    mqtt_stats_panel()
+
     st.markdown(t["actions_taken"])
-    for action in protocol["actions"]:
-        st.write(action)
+    for i, action in enumerate(protocol["actions"], 1):
+        st.markdown(f"{i}. {action}")
+
     st.markdown(t["vitals_chart"])
     st.plotly_chart(plot_vitals(vitals), use_container_width=True)
-    st.markdown(t["mqtt_flow"])
-    st.plotly_chart(mqtt_flow_diagram(case_id, protocol), use_container_width=True)
-    st.markdown(t["protocol_timeline"])
-    protocol_timeline(case_id, protocol, vitals)
-    st.markdown(t["risk_prediction"])
-    st.metric(label=t["critical_event_probability"], value=f"{predict_risk(vitals, patient)}/3 Risk Level")
-    st.markdown(t["mqtt_topic"])
-    st.code(protocol["topic"], language="plaintext")
-    mqtt_stats_panel()
-    st.markdown(t["download_pdf"])
-    st.download_button(label="📄 Download PDF", data=generate_pdf_report(case_id, vitals, protocol), file_name="ICU_Case_Report.pdf", mime="application/pdf")
-    st.markdown(t["download_csv"])
-    st.download_button(label="📥 Download CSV", data=download_csv_log(), file_name="ICU_Session_Log.csv", mime="text/csv")
 
+    st.markdown(t["mqtt_flow"])
+    st.plotly_chart(mqtt_flow_diagram(protocol["title"], protocol), use_container_width=True)
+
+    st.markdown(t["protocol_timeline"])
+    protocol_timeline(protocol["title"], protocol, vitals)
+
+    st.markdown(t["risk_prediction"])
+    risk_level = ["Low", "Moderate", "High", "Critical"][risk]
+    st.metric(t["critical_event_probability"], risk_level)
+
+    st.markdown(t["message_log"])
+    st.code(f"""
+    [Sensor] Published → {vitals}
+    [Broker] Delivered to AI Engine
+    [AI Engine] Generated Protocol → {protocol['title']}
+    [Broker] Published to {protocol['topic']}
+    [Device] Actions Taken → {', '.join(protocol['actions'])}
+    """)
+    if protocol["critical"]:
+        alarm_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"
+        st.markdown(f'<audio autoplay src="{alarm_url}" controls hidden></audio>', unsafe_allow_html=True)
+
+    pdf = generate_pdf_report(case_id, vitals, protocol)
+    st.download_button(t["download_pdf"], data=pdf, file_name=f"{protocol['title'].replace(' ', '_')}.pdf", mime="application/pdf")
+
+    log_data = pd.DataFrame([{
+        "Patient": selected_patient,
+        "Case": protocol["title"],
+        "Topic": protocol["topic"],
+        "HR": vitals["HR"],
+        "SpO2": vitals["SpO2"],
+        "Glucose": vitals["Glucose"],
+        "Movement": vitals["Movement"],
+        "Risk": risk_level,
+        "Age": patients[selected_patient]["Age"]
+    }])
+    csv_buf = io.StringIO()
+    log_data.to_csv(csv_buf, index=False)
+    st.download_button(t["download_csv"], data=csv_buf.getvalue(), file_name="icu_log.csv", mime="text/csv")
+
+st.markdown("---")
 st.caption(t["app_caption"])
